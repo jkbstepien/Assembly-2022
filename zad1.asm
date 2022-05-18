@@ -9,9 +9,13 @@ data1 segment
 	buffer		db	200 dup('$')
 	text_ask_a	db	"Input a (range: 0-8): $"
 	text_ask_b	db	"Input b (range: 0-8): $"
+	text_result_x	db	"f(x) = 0 when x = $"
+	text_result_y	db	"f(0) = $"
 	nl		db	13, 10, '$'
-	a_val		dw	?
-	b_val		dw	?
+	valueA		dw	?
+	valueB		dw	?
+	root		db	?
+	axis_size	db	20
 data1 ends
 
 code1 segment
@@ -21,13 +25,41 @@ start1:
 	mov	ss, ax
 	mov	sp, offset ws1
 
-	call	validate
+	call	process_input
 
 	mov	ax, 4c00h		; end program
 	int	21h
 
-validate:
+process_input:
 	call	get_ab
+
+	xchg	ax, bx			; xchg exchanges values (now a = bx, b = ax)
+
+	neg	al			; negate al, then unfold al to ax
+	cbw
+	idiv	bl			; ah - remainder, al = result
+
+	add	al, 48d
+	call	print_regs
+
+	mov	dx, seg buffer
+	mov	es, dx
+	mov	di, offset buffer
+
+	mov	byte ptr es:[di], al
+	mov	byte ptr es:[di + 1], 13d
+	mov	byte ptr es:[di + 2], 10d
+	mov	byte ptr es:[di + 3], '$'
+	
+	mov	dx, offset buffer
+	call	base_print
+	
+	mov	dx, offset text_result_x
+	call	base_print
+
+	mov	dx, offset nl
+	call	base_print
+
 	call	print_regs
 	ret
 
@@ -41,7 +73,7 @@ get_ab:
 
 	sub	ax, 48d			; convert to integer
 	
-	push	ax			; preserve a value
+	mov	word ptr [ds:valueA], ax
 
 	mov	dx, offset nl		; print text at ds:dx - here newline
 	call	base_print
@@ -54,12 +86,13 @@ get_ab:
 	xor	ah, ah
 
 	sub	ax, 48d
-	mov	bx, ax			; save b value to bx
+	mov	word ptr [ds:valueB], ax
 
 	mov	dx, offset nl
 	call	base_print
 
-	pop	ax			; restore a value
+	mov	ax, word ptr [ds:valueA]
+	mov	bx, word ptr [ds:valueB]
 	ret
 
 base_print:
