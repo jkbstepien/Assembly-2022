@@ -17,7 +17,10 @@ data1 segment
 	valueA		dw	?, '$'
 	valueB		dw	?, '$'
 	root		db	?
+	div_res		dw	?, '$'
 	ctr_in		dw	?
+	plot_size	dw	20d ; works best between 10 and 40
+	mid_point	dw	?
 	text_plot_scale	db	13, 10, "One character equals 1 unit.$"
 data1 ends
 
@@ -29,7 +32,10 @@ start1:
 	mov	sp, offset ws1
 
 process_input:
-	call	get_ab
+	call	get_ab			; now ax = a, bx = b
+
+	cmp	ax, bx
+	jg	print_frac	
 
 	xchg	ax, bx			; xchg exchanges values (now a = bx, b = ax)
 
@@ -47,63 +53,88 @@ process_input:
 	call	base_print
 
 	neg	al
-;	xchg	ax, bx
+	mov	bx, word ptr ds:[valueB]
 
 nonnegative:
 	add	ax, 48d
-	mov	[ds:valueA], ax
+	mov	word ptr ds:[div_res], ax
 
-	mov	dx, offset valueA
+	mov	dx, offset div_res
 	call	base_print
+	jmp	print_rest
 
+	print_frac:
+		
+		mov	dx, offset text_result_x ; print answer for f(x)=0
+		call	base_print
+		mov	dx, offset text_minus_sign
+		call	base_print
+		mov	dx, offset valueB
+		call	base_print
+;		mov	ax, '/'
+;		mov	dx
+
+	print_rest:
 	mov	dx, offset nl		; print answer for y when x=0
 	call	base_print
 	mov	dx, offset text_result_y
 	call	base_print
-	mov	dx, offset valueA
+	add	bx, 48d
+	mov	word ptr ds:[valueB], bx
+	mov	dx, offset valueB
 	call	base_print
 
 	sub	ax, 48d
-	mov	[ds:valueA], ax
+	sub	bx, 48d
+	mov	word ptr ds:[div_res], ax
+	mov	word ptr ds:[valueB], bx
 
 	mov	dx, offset nl
 	call	base_print
 
+	xor	ax, ax
+	xor	bx, bx
+
 plot:
+	mov	ax, word ptr ds:[plot_size]
+	mov	bx, 2
+	idiv	bl
+	cbw
+	mov	word ptr ds:[mid_point], ax
+
 	mov	dx, seg buffer
 	mov	es, dx
 	mov	di, offset buffer
 
-	mov	byte ptr es:[di + 1], '$'
-
-	mov	cx, 20d
+	mov	cx, word ptr ds:[plot_size]
 	loop1:
 		push	cx
 		mov	[ds:ctr_in], cx
-		mov	cx, 20d
+		mov	cx, word ptr ds:[plot_size]
 
 		loop2:
 			mov	byte ptr es:[di], ' '
 			check0:
-				cmp	cx, 10d
+				cmp	cx, word ptr ds:[mid_point]
 				jne	check1
 				mov	byte ptr es:[di], '#'
 			check1:
-				cmp	[ds:ctr_in], 10d
+				mov	dx, [ds:ctr_in]
+				cmp	dx, word ptr ds:[mid_point]
 				jne	check2
 				mov	byte ptr es:[di], '#'
 			check2:
 				xor	ax, ax
 				xor	bx, bx
 
-				mov	ax, 10d
-				mov	bx, [ds:valueA]
+				mov	ax, word ptr ds:[mid_point]
 				sub	ax, cx
+				mov	bx, [ds:valueA]
 				imul	bl
 				mov	bx, [ds:valueB]
 				add	ax, bx
 				sub	ax, [ds:ctr_in]
-				add	ax, 10d
+				add	ax, word ptr ds:[mid_point]
 
 				cmp	ax, 0
 				jne	end_loop2
@@ -120,8 +151,8 @@ plot:
 		loop	loop1
 
 end1:
-	mov	dx, offset text_plot_scale
-	call	base_print
+;	mov	dx, offset text_plot_scale
+;	call	base_print
 
 	mov	ax, 4c00h
 	int	21h
