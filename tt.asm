@@ -242,26 +242,25 @@ getnum1:
     	cmp al, '9'
     	jg error_end
 
-        mov bl, al
-        mov ax, word ptr ds:[tmp_num]
+        mov bl, al ; we need to copy to bl as ax will be destroyed
+        mov ax, word ptr ds:[tmp_num] ; store in ax partial result
         mov cx, 10
         mul cx          ; tmp_num = tmp_num * 10
 
-        sub bl, '0'     ; 'digit' - '0' = digit
+        sub bl, '0'     ; 'digit' - '0' = digit, in bl we store curr char
         xor bh, bh
         add ax, bx      ; tmp_num = tmp_num + digit
 
-        mov word ptr ds:[tmp_num], ax
+        mov word ptr ds:[tmp_num], ax ; add new partial result
         jmp getnum1     ; handle next character
 ;getnum1
 
 printnum1:  ; in: ax = number to print
-    cmp	ax, 0
+    cmp	ax, 0	; check sign
     jge	positive_num
-      neg ax
+    neg ax
 
     positive_num:
-    push cx          ; cx can be used
     mov cx, 0        
     mov bl, 10       ; system base (in which be printed)
 
@@ -277,21 +276,18 @@ printnum1:  ; in: ax = number to print
 
         cmp ax, 0        ; repeat while ax != 0
         jne pushloop1
-    ;pushloop1
 
     poploop1:
         pop dx          ; popping digits
         mov dl, dh       ; in dh (originally ah) is remainder
         call printdig1
+	
+	loop	poploop1
+;        dec cx          ; decrease digit count
+;        cmp cx, 0        ; repeat while cx > 0
+;        ja poploop1
 
-        dec cx          ; decrease digit count
-        cmp cx, 0        ; repeat while cx > 0
-        ja poploop1
-    ;poploop1
-
-    pop     cx
     ret
-;printnum1
 
 printdig1:
 	; in = dl - digit to print
