@@ -7,20 +7,21 @@ stack1 ends
 
 data1 segment
 	buffer		db	200 dup('$')
-	text_ask_a	db	"Input a (range: 1-255): $"
-	text_ask_b	db	"Input b (range: 1-255): $"
+	text_ask_a	db	"Input a (range: 0-255): $"
+	text_ask_b	db	"Input b (range: 0-255): $"
 	text_result_x	db	"f(x) = 0 when x = $"
 	text_result_y	db	"f(0) = $"
 	text_minus_sign	db	"-$"
 	text_slash	db	"/$"
 	text_test	db	"TEST", 13, 10, '$'
+	text_inf	db	"No root!$", 13, 10
 	nl		db	13, 10, '$'
 	valueA		dw	?, '$'
 	valueB		dw	?, '$'
 	root		db	?
 	div_res		dw	?, '$'
 	ctr_in		dw	?
-	plot_size	dw	30d ; works best between 10 and 40
+	plot_size	dw	20d ; works best between 10 and 40
 	mid_point	dw	?
 	text_plot_scale	db	13, 10, "One character equals 1 unit.$"
 	tmp_num 	dw 	?
@@ -36,28 +37,50 @@ start1:
 process_input:
 	call	get_ab			; now ax = a, bx = b
 
+	cmp	ax, 0
+	jne	handle_not_zero
+	mov	dx, offset text_inf
+	call	base_print
+	jmp	print_rest
+
+	handle_not_zero:
 	cmp	ax, bx
 	jg	print_frac		; case ax > bx
 
 	;case ax <= bx
 	xchg	ax, bx
+
 	div	bl			; ah - rem, al - res
 	
 	mov	dx, offset text_result_x
 	call	base_print
 	mov	dx, offset text_minus_sign
 	call	base_print
-;	mov	dx, offset nl
-;	call	base_print
-;	call	print_regs
+	
+	push	ax
 
 	mov	ah, 0			; round down
-;	call	print_regs
+	call	printnum1
+
+	pop	ax
+
+	cmp	ah, 0
+	je	print_rest
+
+	mov	al, ah
+	mov	ah, 0
+
+	mov	dl, ' '
+	push	ax
+	call	putchar1
+	pop	ax
+	call	printnum1
+	mov	dl, '/'
+	call	putchar1
+	mov	ax, word ptr ds:[valueA]
 	call	printnum1
 
 	mov	bx, word ptr ds:[valueB]
-
-;	call	printnum1	
 	jmp	print_rest
 
 	print_frac:
@@ -83,18 +106,16 @@ process_input:
 	mov	ax, word ptr ds:[valueB]
 	call	printnum1
 
-	sub	ax, 48d
-	sub	bx, 48d
-	mov	word ptr ds:[div_res], ax
-	mov	word ptr ds:[valueB], bx
+;	sub	ax, 48d
+;	sub	bx, 48d
+;	mov	word ptr ds:[div_res], ax
+;	mov	word ptr ds:[valueB], bx
 
 	mov	dx, offset nl
 	call	base_print
 
 	xor	ax, ax
 	xor	bx, bx
-
-	call	end1
 
 plot:
 	mov	ax, word ptr ds:[plot_size]
@@ -110,8 +131,8 @@ plot:
 	mov	cx, word ptr ds:[plot_size]
 	loop1:
 		push	cx
-		mov	[ds:ctr_in], cx
-		mov	cx, word ptr ds:[plot_size]
+		mov	[ds:ctr_in], cx			; row
+		mov	cx, word ptr ds:[plot_size]	; column
 
 		loop2:
 			mov	byte ptr es:[di], ' '
@@ -127,15 +148,26 @@ plot:
 			check2:
 				xor	ax, ax
 				xor	bx, bx
-
 				mov	ax, word ptr ds:[mid_point]
-				sub	ax, cx
-				mov	bx, [ds:valueA]
+;				call	 print_regs
+				sub	al, cl
+
+				mov	bx, word ptr ds:[valueA]
 				imul	bl
-				mov	bx, [ds:valueB]
+;				call	 print_regs
+
+				mov	bx, word ptr ds:[valueB]
+;				call	 print_regs
+
 				add	ax, bx
+;				call	 print_regs
+
 				sub	ax, [ds:ctr_in]
+;				call	 print_regs
+
 				add	ax, word ptr ds:[mid_point]
+;				call	 print_regs
+;				jmp	end1
 
 				cmp	ax, 0
 				jne	end_loop2
@@ -152,8 +184,8 @@ plot:
 		loop	loop1
 
 end1:
-;	mov	dx, offset text_plot_scale
-;	call	base_print
+	mov	dx, offset text_plot_scale
+	call	base_print
 
 	mov	ax, 4c00h
 	int	21h
