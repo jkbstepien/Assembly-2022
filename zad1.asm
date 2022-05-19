@@ -7,11 +7,12 @@ stack1 ends
 
 data1 segment
 	buffer		db	200 dup('$')
-	text_ask_a	db	"Input a (range: 1-8): $"
-	text_ask_b	db	"Input b (range: 1-8): $"
+	text_ask_a	db	"Input a (range: 1-255): $"
+	text_ask_b	db	"Input b (range: 1-255): $"
 	text_result_x	db	"f(x) = 0 when x = $"
 	text_result_y	db	"f(0) = $"
 	text_minus_sign	db	"-$"
+	text_slash	db	"/$"
 	text_test	db	"TEST", 13, 10, '$'
 	nl		db	13, 10, '$'
 	valueA		dw	?, '$'
@@ -19,9 +20,10 @@ data1 segment
 	root		db	?
 	div_res		dw	?, '$'
 	ctr_in		dw	?
-	plot_size	dw	20d ; works best between 10 and 40
+	plot_size	dw	30d ; works best between 10 and 40
 	mid_point	dw	?
 	text_plot_scale	db	13, 10, "One character equals 1 unit.$"
+	tmp_num 	dw 	?
 data1 ends
 
 code1 segment
@@ -39,8 +41,8 @@ process_input:
 
 	xchg	ax, bx			; xchg exchanges values (now a = bx, b = ax)
 
-	neg	al			; negate al, then unfold al to ax
-	cbw
+	neg	ax			; negate al, then unfold al to ax
+;	cbw
 	idiv	bl			; ah - remainder, al = result
 
 	mov	dx, offset text_result_x ; print answer for f(x)=0
@@ -48,19 +50,23 @@ process_input:
 	
 	cmp	al, 0
 	jge	nonnegative
+	
+	;--------------------
+	mov	dl, '?'
+	call	putchar1
 
 	mov	dx, offset text_minus_sign
 	call	base_print
 
-	neg	al
+;	neg	al
 	mov	bx, word ptr ds:[valueB]
 
 nonnegative:
-	add	ax, 48d
-	mov	word ptr ds:[div_res], ax
-
-	mov	dx, offset div_res
-	call	base_print
+;	add	ax, 48d
+;	mov	word ptr ds:[div_res], ax
+	call	printnum1	
+;	mov	dx, offset div_res
+;	call	base_print
 	jmp	print_rest
 
 	print_frac:
@@ -69,20 +75,28 @@ nonnegative:
 		call	base_print
 		mov	dx, offset text_minus_sign
 		call	base_print
-		mov	dx, offset valueB
-		call	base_print
-;		mov	ax, '/'
-;		mov	dx
+
+		mov	ax, word ptr ds:[valueB]
+		call	printnum1
+;		mov	dx, word ptr ds:[text_slash]
+;		call	base_print	
+		mov	dl, '/'
+		call	putchar1
+		mov	ax, word ptr ds:[valueA]
+		call	printnum1
 
 	print_rest:
 	mov	dx, offset nl		; print answer for y when x=0
 	call	base_print
 	mov	dx, offset text_result_y
 	call	base_print
-	add	bx, 48d
-	mov	word ptr ds:[valueB], bx
-	mov	dx, offset valueB
-	call	base_print
+
+	mov	ax, word ptr ds:[valueB]
+	call	printnum1
+;	add	bx, 48d
+;	mov	word ptr ds:[valueB], bx
+;	mov	dx, offset valueB
+;	call	base_print
 
 	sub	ax, 48d
 	sub	bx, 48d
@@ -94,6 +108,8 @@ nonnegative:
 
 	xor	ax, ax
 	xor	bx, bx
+
+	call	end1
 
 plot:
 	mov	ax, word ptr ds:[plot_size]
@@ -157,37 +173,111 @@ end1:
 	mov	ax, 4c00h
 	int	21h
 
-get_ab:
-	mov 	dx, offset text_ask_a	; prompt user for a value
-	call	base_print
-
-	mov	ah, 1			; int 21,1 - keyboard input with echo
+putchar1:
+; in = dl, character to output
+	mov	ah, 2	; print char from dl
 	int	21h
-	xor	ah, ah			; clear ah register (al = a value)
-
-	sub	ax, 48d			; convert to integer
-	
-	mov	word ptr [ds:valueA], ax
-
-	mov	dx, offset nl		; print text at ds:dx - here newline
-	call	base_print
-
-	mov	dx, offset text_ask_b	; prompt user for b value
-	call	base_print
-	
-	mov	ah, 1
-	int	21h
-	xor	ah, ah
-
-	sub	ax, 48d
-	mov	word ptr [ds:valueB], ax
-
-	mov	dx, offset nl
-	call	base_print
-
-	mov	ax, word ptr [ds:valueA]
-	mov	bx, word ptr [ds:valueB]
 	ret
+
+getchar1:
+; out: al = character from standard input device
+    mov ah, 1  ; INT 21,1 - Keyboard Input with Echo
+    int 21h
+    ret
+
+getnum1:
+; out: tmp_num, tmp_sign
+    call getchar1
+    cmp al, 13      
+    jne getnum1_loop 
+    ; if entered carriage return
+    ret
+
+    getnum1_loop:
+        mov bl, al
+        mov ax, word ptr ds:[tmp_num]
+        mov cx, 10
+        mul cx          ; tmp_num = tmp_num * 10
+
+        sub bl, '0'     ; 'digit' - '0' = digit
+        xor bh, bh
+        add ax, bx      ; tmp_num = tmp_num + digit
+
+        mov word ptr ds:[tmp_num], ax
+        jmp getnum1     ; handle next character
+;getnum1
+
+printnum1:  ; in: ax = number to print
+    cmp	ax, 0
+    jge	positive_num
+      neg ax
+
+    positive_num:
+    push cx          ; cx can be used
+    mov cx, 0        
+    mov bl, 10       ; system base (in which be printed)
+
+    pushloop1:
+        div bl          ; al = ax / bl
+                        ; ah = ax % bl
+
+        push ax          ; digit pushed on stack
+        
+        inc cx          ; digit counter
+
+        mov ah, 0        ; cleaning ax
+
+        cmp ax, 0        ; repeat while ax != 0
+        jne pushloop1
+    ;pushloop1
+
+    poploop1:
+        pop dx          ; popping digits
+        mov dl, dh       ; in dh (originally ah) is remainder
+        call printdig1
+
+        dec cx          ; decrease digit count
+        cmp cx, 0        ; repeat while cx > 0
+        ja poploop1
+    ;poploop1
+
+    pop     cx
+    ret
+;printnum1
+
+printdig1:
+	; in = dl - digit to print
+	add	dl, 48d
+	call 	putchar1
+	ret
+
+get_ab:
+    mov     dx, offset text_ask_a   ; prompt user for a value
+    call    base_print
+
+    mov word ptr ds:[tmp_num], 0
+    call getnum1
+    mov ax, word ptr ds:[tmp_num]
+    mov word ptr [ds:valueA], ax
+
+    mov dx, offset nl       ; print text at ds:dx - here newline
+    call    base_print
+
+    mov dx, offset text_ask_b   ; prompt user for b value
+    call    base_print
+    
+    mov word ptr ds:[tmp_num], 0
+    call getnum1
+    mov ax, word ptr ds:[tmp_num]
+    mov word ptr [ds:valueB], ax
+
+    mov dx, offset nl
+    call    base_print
+
+    mov ax, word ptr [ds:valueA]
+    mov bx, word ptr [ds:valueB]
+    ret
+
 
 base_print:
 	push	ax
