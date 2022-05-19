@@ -13,7 +13,8 @@ data1 segment
 	text_result_y	db	"f(0) = $"
 	text_minus_sign	db	"-$"
 	text_slash	db	"/$"
-	text_test	db	"TEST", 13, 10, '$'
+	text_error	db	13, 10, "Error: Invalid argument!$"
+	text_err_range	db	13, 10, "Error: Out of range! Try 0-255.$"
 	text_inf	db	"No root!$", 13, 10
 	nl		db	13, 10, '$'
 	valueA		dw	?, '$'
@@ -36,6 +37,8 @@ start1:
 
 process_input:
 	call	get_ab			; now ax = a, bx = b
+	
+	call	validate_range
 
 	cmp	ax, 0
 	jne	handle_not_zero
@@ -190,6 +193,29 @@ end1:
 	mov	ax, 4c00h
 	int	21h
 
+error_end:
+	mov	dx, offset text_error
+	call	base_print
+	mov	ax, 4c00h
+	int	21h
+
+error_range_end:
+	mov	dx, offset text_err_range
+	call	base_print
+	mov	ax, 4c00h
+	int	21h
+
+validate_range:
+	cmp	ax, 0
+	jl	error_range_end
+	cmp	ax, 255
+	jg	error_range_end
+	cmp	bx, 0
+	jl	error_range_end
+	cmp	bx, 255
+	jg	error_range_end
+	ret
+
 putchar1:
 ; in = dl, character to output
 	mov	ah, 2	; print char from dl
@@ -211,6 +237,11 @@ getnum1:
     ret
 
     getnum1_loop:
+    	cmp	al, '0'
+    	jl error_end
+    	cmp al, '9'
+    	jg error_end
+
         mov bl, al
         mov ax, word ptr ds:[tmp_num]
         mov cx, 10
