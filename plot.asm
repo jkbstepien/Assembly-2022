@@ -29,60 +29,61 @@ data1 ends
 code1 segment
 
 start1:	
-	mov	ax, seg stack1		; initialize stack
+	mov	ax, seg stack1			; initialize stack
 	mov	ss, ax
 	mov	sp, offset ws1
 
 process_input:
-	call	get_ab			; now ax = a, bx = b
+	call	get_ab				; get input from user: now ax = a, bx = b
 	
-	call	validate_range
+	call	validate_range			; validate if values of (a,b) are within correct range
 
-	cmp	ax, 0
-	jne	handle_not_zero
-	mov	dx, offset text_inf
+	cmp	ax, 0				; check if a == 0, handling div 0 error
+	jne	handle_not_zero			; if no -> jump to next point 
+	
+	mov	dx, offset text_inf		; if yes -> print text about no function root
 	call	base_print
-	jmp	print_rest
+	jmp	print_rest			; jump to processing b value
 
 	handle_not_zero:
-	cmp	ax, bx
-	jg	print_frac		; case ax > bx
+		cmp	ax, bx
+		jg	print_frac		; case ax > bx
 
-	;case ax <= bx
-	xchg	ax, bx
+		;case ax <= bx
+		xchg	ax, bx
 
-	div	bl			; ah - rem, al - res
+		div	bl			; ah - rem, al - res
 	
-	mov	dx, offset text_result_x
-	call	base_print
-	mov	dx, offset text_minus_sign
-	call	base_print
+		mov	dx, offset text_result_x
+		call	base_print
+		mov	dx, offset text_minus_sign
+		call	base_print
 	
-	push	ax
+		push	ax
 
-	mov	ah, 0			; round down
-	call	printnum1
+		mov	ah, 0			; round down
+		call	printnum1
 
-	pop	ax
+		pop	ax
 
-	cmp	ah, 0
-	je	print_rest
+		cmp	ah, 0
+		je	print_rest
 
-	mov	al, ah
-	mov	ah, 0
+		mov	al, ah
+		mov	ah, 0
 
-	mov	dl, ' '
-	push	ax
-	call	putchar1
-	pop	ax
-	call	printnum1
-	mov	dl, '/'
-	call	putchar1
-	mov	ax, word ptr ds:[valueA]
-	call	printnum1
+		mov	dl, ' '
+		push	ax
+		call	putchar1
+		pop	ax
+		call	printnum1
+		mov	dl, '/'
+		call	putchar1
+		mov	ax, word ptr ds:[valueA]
+		call	printnum1
 
-	mov	bx, word ptr ds:[valueB]
-	jmp	print_rest
+		mov	bx, word ptr ds:[valueB]
+		jmp	print_rest
 
 	print_frac:
 		
@@ -99,19 +100,19 @@ process_input:
 		call	printnum1
 
 	print_rest:
-	mov	dx, offset nl		; print answer for y when x=0
-	call	base_print
-	mov	dx, offset text_result_y
-	call	base_print
+		mov	dx, offset nl		; print answer for y when x=0
+		call	base_print
+		mov	dx, offset text_result_y
+		call	base_print
 
-	mov	ax, word ptr ds:[valueB]
-	call	printnum1
+		mov	ax, word ptr ds:[valueB]
+		call	printnum1
 
-	mov	dx, offset nl
-	call	base_print
+		mov	dx, offset nl
+		call	base_print
 
-	xor	ax, ax
-	xor	bx, bx
+		xor	ax, ax
+		xor	bx, bx
 
 plot:
 	mov	ax, word ptr ds:[plot_size]
