@@ -23,7 +23,7 @@ data1 segment
 	plot_size	dw	20d ; works best between 10 and 40
 	mid_point	dw	?
 	text_plot_scale	db	13, 10, "One character equals 1 unit.$"
-	tmp_num 	dw 	?
+	part_res 	dw 	?
 data1 ends
 
 code1 segment
@@ -62,7 +62,7 @@ process_input:
 		push	ax
 
 		mov	ah, 0			; round down
-		call	printnum1
+		call	write_number
 
 		pop	ax
 
@@ -74,13 +74,13 @@ process_input:
 
 		mov	dl, ' '
 		push	ax
-		call	putchar1
+		call	write_char
 		pop	ax
-		call	printnum1
+		call	write_number
 		mov	dl, '/'
-		call	putchar1
+		call	write_char
 		mov	ax, word ptr ds:[valueA]
-		call	printnum1
+		call	write_number
 
 		mov	bx, word ptr ds:[valueB]
 		jmp	print_rest
@@ -93,11 +93,11 @@ process_input:
 		call	base_print
 
 		mov	ax, word ptr ds:[valueB]
-		call	printnum1
+		call	write_number
 		mov	dl, '/'
-		call	putchar1
+		call	write_char
 		mov	ax, word ptr ds:[valueA]
-		call	printnum1
+		call	write_number
 
 	print_rest:
 		mov	dx, offset nl		; print answer for y when x=0
@@ -106,7 +106,7 @@ process_input:
 		call	base_print
 
 		mov	ax, word ptr ds:[valueB]
-		call	printnum1
+		call	write_number
 
 		mov	dx, offset nl
 		call	base_print
@@ -206,31 +206,31 @@ validate_range:
 	jg	error_range_end
 	ret					; if everything's fine -> return to program main part
 
-putchar1:
+write_char:
 	mov	ah, 2			  	; print char stored in dl register
 	int	21h
 	ret
 
-getchar1:
+read_char:
 	mov	ah, 1				; INT 21, 1 - keyboard input with echo
 	int	21h				; out: in al register is char from stdin
 	ret
 
-getnum1:
+read_number:
 	; out: current num, sign
-    	call 	getchar1			; load char to process
+    	call 	read_char			; load char to process
     	cmp 	al, 13   			; 13 represents carriage return
-    	jne 	getnum1_loop			; if encountered -> return
+    	jne 	read_number_loop			; if encountered -> return
     	ret
 
-    	getnum1_loop:
+    	read_number_loop:
     		cmp	al, '0'
     		jl 	error_end
     		cmp 	al, '9'
     		jg 	error_end
 
         	mov 	bl, al 				; we need to copy to bl as ax will be destroyed
-        	mov 	ax, word ptr ds:[tmp_num] 	; store in ax partial result
+        	mov 	ax, word ptr ds:[part_res] 	; store in ax partial result
         	mov 	cx, 10
         	mul 	cx          			; curr_number = curr_number * 10
 
@@ -238,10 +238,10 @@ getnum1:
         	xor 	bh, bh				; reset bh register
         	add 	ax, bx      			; curr_num = curr_num + digit
 
-        	mov 	word ptr ds:[tmp_num], ax 	; add new partial result
-        	jmp 	getnum1     			; handle next character
+        	mov 	word ptr ds:[part_res], ax 	; add new partial result
+        	jmp 	read_number     			; handle next character
 
-printnum1:
+write_number:
 	; in: ax = number to print
 	cmp	ax, 0				; check sign
     	jge	positive_num
@@ -251,7 +251,7 @@ printnum1:
     		mov 	cx, 0        
     		mov 	bl, 10       		; system base (in which be printed)
 
-    		pushloop1:
+    		loop_push:
         		div 	bl          	; al = ax / bl
                         			; ah = ax % bl
 
@@ -262,29 +262,29 @@ printnum1:
         		mov	ah, 0        	; cleaning ax
 
         		cmp	ax, 0        	; repeat while ax != 0
-        		jne 	pushloop1
+        		jne 	loop_push
 
-    		poploop1:
+    		loop_pop:
         		pop	dx          	; popping digits
         		mov 	dl, dh       	; in dh (originally ah) is remainder
         		call	printdig1
 	
-			loop	poploop1
+			loop	loop_pop
 
     	ret
 
 printdig1:
 	add	dl, 48d				; convert digit to char, stored in dl register
-	call 	putchar1			; print char
+	call 	write_char			; print char
 	ret
 
 get_ab:
 	mov     dx, offset text_ask_a   	; prompt user for a value
 	call    base_print
 
-	mov 	word ptr ds:[tmp_num], 0	; get number and store it under valueA
-    	call 	getnum1
-    	mov 	ax, word ptr ds:[tmp_num]
+	mov 	word ptr ds:[part_res], 0	; get number and store it under valueA
+    	call 	read_number
+    	mov 	ax, word ptr ds:[part_res]
     	mov 	word ptr [ds:valueA], ax
 
     	mov 	dx, offset nl       		; print text at ds:dx - here newline
@@ -293,9 +293,9 @@ get_ab:
     	mov 	dx, offset text_ask_b   	; prompt user for b value
     	call    base_print
     
-    	mov 	word ptr ds:[tmp_num], 0	; get number and store it under valueB
-    	call 	getnum1
-    	mov 	ax, word ptr ds:[tmp_num]
+    	mov 	word ptr ds:[part_res], 0	; get number and store it under valueB
+    	call 	read_number
+    	mov 	ax, word ptr ds:[part_res]
     	mov 	word ptr [ds:valueB], ax
 
     	mov 	dx, offset nl			; print text at ds:dx - here newline
