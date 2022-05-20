@@ -47,52 +47,50 @@ process_input:
 
 	handle_not_zero:
 		cmp	ax, bx
-		jg	print_frac		; case ax > bx
+		jg	print_frac			; case ax > bx
 
-		;case ax <= bx
-		xchg	ax, bx
-
-		div	bl			; ah - rem, al - res
+		xchg	ax, bx				; case ax <= bx
+		div	bl				; ah - rem, al - res
 	
-		mov	dx, offset text_result_x
+		mov	dx, offset text_result_x	; print message for f(x)=0
 		call	base_print
-		mov	dx, offset text_minus_sign
+		mov	dx, offset text_minus_sign	; print minus sign
 		call	base_print
 	
 		push	ax
 
-		mov	ah, 0			; round down
-		call	write_number
+		mov	ah, 0				; round out number down
+		call	write_number			; print result of division
 
 		pop	ax
 
-		cmp	ah, 0
+		cmp	ah, 0				; if there is no remainder -> process b
 		je	print_rest
 
-		mov	al, ah
+		mov	al, ah				; otherwise, print remainder in form: "a/b"
 		mov	ah, 0
 
-		mov	dl, ' '
+		mov	dl, ' '				; add space after div result
 		push	ax
-		call	write_char
+		call	write_char			; write space
 		pop	ax
-		call	write_number
+		call	write_number			; write first number
 		mov	dl, '/'
-		call	write_char
-		mov	ax, word ptr ds:[valueA]
-		call	write_number
+		call	write_char			; write '/'
+		mov	ax, word ptr ds:[valueA]	; restore ax with valueA
+		call	write_number			; write second number
 
-		mov	bx, word ptr ds:[valueB]
+		mov	bx, word ptr ds:[valueB]	; restore bx with valueB
 		jmp	print_rest
 
 	print_frac:
 		
-		mov	dx, offset text_result_x ; print answer for f(x)=0
+		mov	dx, offset text_result_x 	; print answer for f(x)=0
 		call	base_print
-		mov	dx, offset text_minus_sign
+		mov	dx, offset text_minus_sign	; print minus sign
 		call	base_print
 
-		mov	ax, word ptr ds:[valueB]
+		mov	ax, word ptr ds:[valueB]	; print result in form of: "a/b"
 		call	write_number
 		mov	dl, '/'
 		call	write_char
@@ -100,77 +98,85 @@ process_input:
 		call	write_number
 
 	print_rest:
-		mov	dx, offset nl		; print answer for y when x=0
+		mov	dx, offset nl			; print newline
 		call	base_print
-		mov	dx, offset text_result_y
+		mov	dx, offset text_result_y	; print message for f(x) when x=0
 		call	base_print
 
-		mov	ax, word ptr ds:[valueB]
+		mov	ax, word ptr ds:[valueB]	; print valueB
 		call	write_number
 
-		mov	dx, offset nl
+		mov	dx, offset nl			; print newline
 		call	base_print
 
-		xor	ax, ax
-		xor	bx, bx
+		xor	ax, ax				; clear ax
+		xor	bx, bx				; clear bx
 
 plot:
-	mov	ax, word ptr ds:[plot_size]
+	mov	ax, word ptr ds:[plot_size]		; calculate midpoint of a plot
 	mov	bx, 2
 	idiv	bl
 	cbw
 	mov	word ptr ds:[mid_point], ax
 
-	mov	dx, seg buffer
+	mov	dx, seg buffer				; initialize buffer using extra segment es
 	mov	es, dx
 	mov	di, offset buffer
 
-	mov	cx, word ptr ds:[plot_size]
+	mov	cx, word ptr ds:[plot_size]		; set outer counter
 	loop1:
-		push	cx
-		mov	[ds:ctr_in], cx			; row
-		mov	cx, word ptr ds:[plot_size]	; column
+		push	cx				; preserve outer cx
+		mov	[ds:ctr_in], cx			; ctr_in = current row
+		mov	cx, word ptr ds:[plot_size]	; cx = current column
 
 		loop2:
-			mov	byte ptr es:[di], ' '
+			mov	byte ptr es:[di], ' '			; by default we print whitespace
+			
 			check0:
-				cmp	cx, word ptr ds:[mid_point]
-				jne	check1
-				mov	byte ptr es:[di], '#'
+				cmp	cx, word ptr ds:[mid_point]	; check if cx lies on OY
+				jne	check1				; no -> check next condition
+				mov	byte ptr es:[di], '#'		; yes -> set "#" to be printed
+			
 			check1:
 				mov	dx, [ds:ctr_in]
-				cmp	dx, word ptr ds:[mid_point]
-				jne	check2
-				mov	byte ptr es:[di], '#'
+				cmp	dx, word ptr ds:[mid_point]	; check if ctr_in lies on OX
+				jne	check2				; no -> check next condition
+				mov	byte ptr es:[di], '#'		; yes -> set "#" to be printed
+			
+			; check if point lies on function plot:
+			; 	(mid_point - curr_column) * valueA + valueB = curr_row - mid_point
+			;	(mid_point - curr_column) * valueA + valueB - curr_row + mid_point = 0
 			check2:
-				xor	ax, ax
-				xor	bx, bx
+				xor	ax, ax				; clear ax
+				xor	bx, bx				; clear bx
+
 				mov	ax, word ptr ds:[mid_point]
-				sub	al, cl
+				sub	al, cl				; mid_point - curr_column
 
 				mov	bx, word ptr ds:[valueA]
-				imul	bl
+				imul	bl				; result * valueA
 
 				mov	bx, word ptr ds:[valueB]
 
-				add	ax, bx
+				add	ax, bx				; result + valueB
 
-				sub	ax, [ds:ctr_in]
+				sub	ax, [ds:ctr_in]			; result - curr_row
 
-				add	ax, word ptr ds:[mid_point]
+				add	ax, word ptr ds:[mid_point]	; result + mid_point
 
-				cmp	ax, 0
-				jne	end_loop2
-				mov	byte ptr es:[di], '*'
+				cmp	ax, 0				; compare to 0
+				jne	end_loop2			; no -> jump to end condition
+				mov	byte ptr es:[di], '*'		; yes -> set "*" to be printed
 
 			end_loop2:
-				mov	dx, offset buffer
+				mov	dx, offset buffer		; print what's now in buffer
 				call	base_print
 				loop	loop2
 
-		mov	dx, offset nl
+		mov	dx, offset nl			; print newline
 		call	base_print
-		pop	cx
+
+		pop	cx				; restore outer cx
 		loop	loop1
 
 end1:
