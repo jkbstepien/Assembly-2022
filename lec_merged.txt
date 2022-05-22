@@ -1,0 +1,379 @@
+PS C:\Projects\Assembly> cat .\lec1.asm
+---------------------------------------------------------------------------
+data segment
+
+a4      dw 12
+d1      db 13, 14, 15, 16
+text1   db "ABC$"
+
+data ends
+
+code segment
+
+s1:     mov ax, seg stos
+        mov ss, ax
+        mov sp, offset ws1
+
+        mov ax, seg text1
+        mov ds, ax
+        mov dx, offset text1
+        mov ah, 9               ; wypisz tekst ds:dx
+        int 21h                 ; przerwanie DOS
+
+        mov ax, 4c00h           ; zakoncz program
+        int 21h
+
+code ends
+
+stos segment stack
+
+        dw      200 dup(?)
+ws1     dw      ?
+
+stos segment ends
+
+end s1
+
+PS C:\Projects\Assembly> cat .\lec2.asm
+--------------------------------------------------------------------------------
+assume cs:code1, ds:dane1
+
+dane1 segment
+        text1   db "Hello world!$"
+        text2   db 13, 10, "123456$"
+        text3   db 13, 10, "Dobrze chlopaki robia$"
+dane1 ends
+
+code1 segment
+start1:
+        mov ax, seg stack1
+        mov ss, ax
+        mov sp, offset ws1
+
+        mov dx, offset text1
+        call txt1
+
+        mov dx, offset text2
+        call txt1
+
+        mov dx, offset text3
+        call txt1
+
+        mov ax, 4c00h           ; end program
+        int 21h
+
+;-------------------------------
+;       in: dx = offset text do wypisania
+txt1:
+        mov ax, seg dane1
+        mov ds, ax
+
+        mov ah, 9
+        int 21h
+        ret
+;-------------------------------
+
+code1 ends
+
+stack1 segment stack
+                dw      200 dup(?)
+        ws1     dw      ?
+stack1 ends
+
+end start1
+
+PS C:\Projects\Assembly> cat .\lec3.asm
+-----------------------------------------------------------------------
+; TL;DR
+;       - How to pass arguments to our program.
+
+assume cs:code1, ds:dane1
+
+dane1 segment
+        buff1   db      300 dup('$')
+dane1 ends
+
+; PSP - Program Segment Prefix
+
+code1 segment
+;       ds: points to PSP
+;       080h -> iloÅ›Ä‡ znakÃ³w argc
+;       081h -> spacja
+;       082h -> string parametrow
+
+start1:
+        mov     ax, seg ws1
+        mov     ss, ax
+        mov     sp, offset ws1
+
+        mov     ax, seg buff1
+        mov     es, ax
+        ; ds = PSP
+        mov     si, 082h                        ; what to copy
+        mov     di, offset buff1                ; where to copy
+        xor     cx, cx
+        mov     cl, byte ptr ds:[80h]           ; number of elements
+
+;p1:
+;       mov     al, byte ptr ds:[si]
+;       mov     byte ptr es:[di], al
+;       inc     si
+;       inc     di
+;       loop    p1
+
+        cld                                     ; clear direction flag DF=0
+        rep     movsb                           ; es:[di] <= ds:[si], si += 1, di += 1
+
+        mov     dx, offset buff1
+        call    txt1
+
+        mov     ax, 4c00h                       ; end program
+        int     21h
+
+;-------------------------------
+;       in: dx = offset text do wypisania
+txt1:
+        mov     ax, seg dane1
+        mov     ds, ax
+
+        mov     ah, 9
+        int     21h
+        ret
+;-------------------------------
+
+code1 ends
+
+stack1 segment stack
+                dw      200 dup(?)
+        ws1     dw      ?
+stack1 ends
+
+end start1
+
+PS C:\Projects\Assembly> cat .\lec4.asm
+---------------------------------------------------------------------------
+; TL;DR
+;       - Drawing colors.
+
+assume cs:code1
+
+code1 segment
+
+start1:
+        mov     ax, seg ws1
+        mov     ss, ax
+        mov     sp, offset ws1
+
+        mov     al, 13h                         ; graphic mode 320x200 256 colours
+        mov     ah, 0                           ; change mode of VGA card
+        int     10h
+
+        mov     word ptr cs:[x], 0
+        mov     word ptr cs:[y], 50
+        mov     byte ptr cs:[k], 15
+        mov     cx, 70
+
+p0:     push    cx
+;-----------------------------------------
+        mov     cx, 255
+p1:
+        push    cx
+        mov     al, byte ptr cs:[x]
+        mov     byte ptr cs:[k], al
+        call    point
+        inc     word ptr cs:[x]
+        pop     cx
+        loop    p1
+
+;-----------------------------------------
+        mov     word ptr cs:[x], 0
+        inc     word ptr cs:[y]
+        pop     cx
+        loop    p0
+
+        xor     ax, ax
+        int     16h                             ; wait for keyboard
+
+koniec:
+        mov     al, 3                           ; text mode
+        mov     ah, 0                           ; change mode of VGA card
+        int     10h
+
+        mov     ax, 4c00h                       ; end program
+        int     21h
+
+;-----------------------------------------
+; Parameters used for drawing colours:
+x       dw      ?                               ; x position
+y       dw      ?                               ; y position
+k       db      ?                               ; desired colour
+
+point:
+        mov     ax, 0a000h
+        mov     es, ax
+        mov     bx, 320
+        mov     ax, word ptr cs:[y]
+        mul     bx                              ; dx:ax = ax*bx -> ax = 320*y
+        mov     bx, word ptr cs:[x]
+        add     bx, ax                          ; -> bx = 320*y + x
+        mov     al, byte ptr cs:[k]
+        mov     byte ptr es:[bx], al            ; colour point on the screen
+        ret
+;-----------------------------------------
+
+code1 ends
+
+stack1 segment stack
+                dw      200 dup(?)
+        ws1     dw      ?
+stack1 ends
+
+end start1
+
+PS C:\Projects\Assembly> cat .\lec5.asm
+----------------------------------------------------------------------
+; TL;DR
+; Handling external files in assembly program.
+
+assume cs:code1, ds:dane1
+
+dane1 segment
+        nazwa1  db      "dane.wej", 0
+        wsk1    dw      ?
+        buf1    db      300 dup("$")
+dane1 ends
+
+code1 segment
+
+start1:
+        mov     ax, seg ws1
+        mov     ss, ax
+        mov     sp, offset ws1
+
+;open
+        mov     ax, seg nazwa1
+        mov     ds, ax
+        mov     dx, offset nazwa1               ; ds:dx -> pointer to filename
+        mov     al, 0
+        mov     ah, 03dh
+        int     21h                             ; DOS interrupt - opening file to read
+        mov     word ptr ds:[wsk1], ax
+
+;read
+        mov     ax, seg buf1
+        mov     ds, ax
+        mov     dx, offset buf1                 ; ds:dx -> pointer to buffer
+        mov     cx, 299
+        mov     bx, word ptr ds:[wsk1]
+        mov     ah, 03fh
+        int     21h                             ; read characters from file
+        ; if CF=0 then ax = no of read characters
+
+;close
+        mov     bx, word ptr ds:[wsk1]
+        mov     ah, 3eh
+        int     21h
+
+;print results
+        mov     ax, seg buf1
+        mov     ds, ax
+        mov     dx, offset buf1
+        mov     ah, 9
+        int     21h
+
+koniec:
+        mov     ax, 4c00h                       ; end program
+        int     21h
+
+code1 ends
+
+stack1 segment stack
+                dw      200 dup(?)
+        ws1     dw      ?
+stack1 ends
+
+end start1
+
+
+PS C:\Projects\Assembly> cat .\lec6.asm
+-------------------------------------------------------------------
+; TL;DR
+; Accessing video memory directly - this time in text mode.
+; Using devices through ports;
+
+assume cs:code1
+
+code1 segment
+
+start1:
+        mov     ax, seg ws1
+        mov     ss, ax
+        mov     sp, offset ws1
+
+        mov     ax, 0b800h                      ; cleaning screen
+        mov     es, ax
+        mov     di, 0;                          ; es:di -> first cell on the screen
+        mov     cx, 2000
+        mov     ah, 00011111b                   ; attribute
+        mov     al, 'x'                         ; char
+        cld
+        rep     stosw
+
+        mov     ax, 0b800h                      ; first memory cell in text mode
+        mov     es, ax
+        mov     si, 12*160+40*2                 ; es:si -> cell on the screen
+
+        mov     al, 65                          ; ASCII
+        mov     ah, 01001111b                   ; attribute
+        mov     word ptr es:[si], ax
+
+p1:
+        in      al, 060h                        ; read from keyboard SCANCODE
+        cmp     al, byte ptr cs:[k1]
+        jz      p1
+        mov     byte ptr cs:[k1], al
+
+        cmp     al, 1                           ; ESC
+        jz      koniec                          ; jump if flag = 0
+
+        mov     byte ptr es:[si], ' '           ; char
+        mov     byte ptr es:[si+1], 00000000b   ; attribute
+
+        cmp     al, 75                          ; left
+        jnz     p2
+        sub     si, 2
+
+p2:
+        cmp     al, 77                          ; right
+        jnz     p3
+        add     si, 2
+
+p3:
+        cmp     al, 72                          ; up
+        jnz     p4
+        sub     si, 160
+
+p4:
+        cmp     al, 80                          ; down
+        jnz     p5
+        add     si, 160
+
+p5:
+        mov     byte ptr es:[si], 1             ; char
+        mov     byte ptr es:[si+1], 01001111b   ; attribute
+        jmp     p1
+
+koniec:
+        mov     ax, 4c00h                       ; end program
+        int     21h
+
+k1      db      ?                               ; last pressed keycap
+
+code1 ends
+
+stack1 segment stack
+                dw      200 dup(?)
+        ws1     dw      ?
+stack1 ends
+
+end start1

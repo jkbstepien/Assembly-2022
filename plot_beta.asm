@@ -7,13 +7,14 @@ stack1 ends
 
 data1 segment
 	buffer		db	200 dup('$')
-	text_ask_a	db	"Input a (range: -128 - 127): $"
-	text_ask_b	db	"Input b (range: -128 - 127): $"
+	text_ask_a	db	"Input a (range: 0-255): $"
+	text_ask_b	db	"Input b (range: 0-255): $"
 	text_result_x	db	"f(x) = 0 when x = $"
 	text_result_y	db	"f(0) = $"
+	text_minus_sign	db	"-$"
 	text_slash	db	"/$"
 	text_error	db	13, 10, "Error: Invalid argument!$"
-	text_err_range	db	13, 10, "Error: Out of range! Try -128 - 127.$"
+	text_err_range	db	13, 10, "Error: Out of range! Try 0-255.$"
 	text_inf	db	"No root!$", 13, 10
 	nl		db	13, 10, '$'
 	valueA		dw	?, '$'
@@ -23,7 +24,6 @@ data1 segment
 	mid_point	dw	?
 	text_plot_scale	db	13, 10, "One character equals 1 unit.$"
 	part_res 	dw 	?
-	part_sgn	db	?
 data1 ends
 
 code1 segment
@@ -46,100 +46,55 @@ process_input:
 	jmp	print_rest			; jump to processing b value
 
 	handle_not_zero:
+		cmp	ax, bx
+		jg	print_frac			; case ax > bx
+
+		xchg	ax, bx				; case ax <= bx
+		div	bl				; ah - rem, al - res
+	
 		mov	dx, offset text_result_x	; print message for f(x)=0
 		call	base_print
+		mov	dx, offset text_minus_sign	; print minus sign
+		call	base_print
+	
+		push	ax
 
-		neg  	ax 			; because we want to print -bx/ax 
+		mov	ah, 0				; round out number down
+		call	write_number			; print result of division
 
-		cmp 	ax, 0
-		jg  	positive_ax
+		pop	ax
 
-		cmp 	bx, 0
-		jg	positive_ax_negative_bx
+		cmp	ah, 0				; if there is no remainder -> process b
+		je	print_rest
 
-		jmp 	negative_ax_negative_bx
+		mov	al, ah				; otherwise, print remainder in form: "a/b"
+		mov	ah, 0
 
-		positive_ax:
-			cmp 	bx, 0
-			jg	positive_ax_positive_bx
+		mov	dl, ' '				; add space after div result
+		push	ax
+		call	write_char			; write space
+		pop	ax
+		call	write_number			; write first number
+		mov	dl, '/'
+		call	write_char			; write '/'
+		mov	ax, word ptr ds:[valueA]	; restore ax with valueA
+		call	write_number			; write second number
 
-			jmp  	positive_ax_negative_bx
-
-		positive_ax_negative_bx: 	; the same as negative_ax_positive_bx
-			call	abs
-			xchg	ax, bx
-			call 	abs
-			xchg 	ax, bx
-
-			; ax = abs(ax), bx = abs(bx)
-
-			; write minus sign
-			mov 	dl, '-'
-			push 	ax
-			call 	write_char
-			pop  	ax
-
-			jmp positive_ax_positive_bx
-
-		negative_ax_negative_bx:
-			call 	abs
-			xchg 	ax, bx
-			call 	abs
-			xchg 	ax, bx
-
-			; ax = abs(ax), bx = abs(bx)
-
-			jmp	positive_ax_positive_bx
-
-		positive_ax_positive_bx:
-		cmp	bx, 0 				; we don't want to print 0/1
-		je     	b_bigger_than_a
-
-		cmp	ax, bx
-		jg	print_frac			; case abs(ax) > abs(bx)
-
-		; case abs(ax) <= abs(bx)
-		b_bigger_than_a:
-
-			xchg	ax, bx
-
-			; ax and bx are now non negative
-			div	bl				; ah - rem, al - res
-
-			push	ax 				; ax will be destroyed
-			mov	ah, 0				; round out number down
-			call 	abs
-			call	write_number			; print result of division
-			pop	ax
-
-			cmp	ah, 0				; no remainder -> process b
-			je	print_rest
-
-			mov	al, ah				; otherwise, print remainder as: "a/b"
-			mov	ah, 0
-
-			mov	dl, ' '				; add space after div result
-			push	ax
-			call	write_char			; write space
-			pop	ax
-			call	write_number			; write first number
-			mov	dl, '/'
-			call	write_char			; write '/'
-			mov	ax, word ptr ds:[valueA]	; restore ax with valueA
-			call 	abs 	 			; ax = abs(ax)
-			call	write_number			; write second number
-
-			mov	bx, word ptr ds:[valueB]	; restore bx with valueB
-			jmp	print_rest
+		mov	bx, word ptr ds:[valueB]	; restore bx with valueB
+		jmp	print_rest
 
 	print_frac:
-		mov	ax, word ptr ds:[valueB]		; print result in form of: "a/b"
-		call 	abs
+		
+		mov	dx, offset text_result_x 	; print answer for f(x)=0
+		call	base_print
+		mov	dx, offset text_minus_sign	; print minus sign
+		call	base_print
+
+		mov	ax, word ptr ds:[valueB]	; print result in form of: "a/b"
 		call	write_number
 		mov	dl, '/'
 		call	write_char
 		mov	ax, word ptr ds:[valueA]
-		call  	abs
 		call	write_number
 
 	print_rest:
@@ -170,8 +125,8 @@ plot:
 
 	mov	cx, word ptr ds:[plot_size]		; set outer counter
 	loop1:
-		push 	cx				; preserve outer cx
-		mov	word ptr ds:[ctr_in], cx	; ctr_in = current row
+		push	cx				; preserve outer cx
+		mov	[ds:ctr_in], cx			; ctr_in = current row
 		mov	cx, word ptr ds:[plot_size]	; cx = current column
 
 		loop2:
@@ -183,7 +138,7 @@ plot:
 				mov	byte ptr es:[di], '#'		; yes -> set "#" to be printed
 			
 			check1:
-				mov	dx, word ptr ds:[ctr_in]
+				mov	dx, [ds:ctr_in]
 				cmp	dx, word ptr ds:[mid_point]	; check if ctr_in lies on OX
 				jne	check2				; no -> check next condition
 				mov	byte ptr es:[di], '#'		; yes -> set "#" to be printed
@@ -194,24 +149,20 @@ plot:
 			check2:
 				xor	ax, ax				; clear ax
 				xor	bx, bx				; clear bx
-				
-				; mid_point - curr_column
+
 				mov	ax, word ptr ds:[mid_point]
-				sub	al, cl
-				
-				; (mid_point - curr_column) * valueA
+				sub	al, cl				; mid_point - curr_column
+
 				mov	bx, word ptr ds:[valueA]
-				imul	bl
+				imul	bl				; result * valueA
 
 				mov	bx, word ptr ds:[valueB]
-				; (mid_point - curr_column) * valueA + valueB
-				add	ax, bx
-				
-				; result - curr_row
-				sub	ax, word ptr ds:[ctr_in]
-				
-				; result + mid_point
-				add	ax, word ptr ds:[mid_point]
+
+				add	ax, bx				; result + valueB
+
+				sub	ax, [ds:ctr_in]			; result - curr_row
+
+				add	ax, word ptr ds:[mid_point]	; result + mid_point
 
 				cmp	ax, 0				; compare to 0
 				jne	end_loop2			; no -> jump to end condition
@@ -250,15 +201,14 @@ error_range_end:
 	int	21h
 
 validate_range:
-	; ax = a, bx = b
-	; cmp checks if values passed by user are in valid range
-	cmp	ax, -1280
+						; ax = a, bx = b
+	cmp	ax, 0				; check if a < 0 then print error else pick next cond
 	jl	error_range_end
-	cmp	ax, 1270
+	cmp	ax, 255				; check if a > 255 then print error else next cond
 	jg	error_range_end
-	cmp	bx, -1280
+	cmp	bx, 0				; check if b < 0 then print error else next cond
 	jl	error_range_end
-	cmp	bx, 1270
+	cmp	bx, 255				; check if b > 255 then print error else next cond
 	jg	error_range_end
 	ret					; if everything's fine -> return to program main part
 
@@ -272,40 +222,14 @@ read_char:
 	int	21h				; out: in al register is char from stdin
 	ret
 
-
 read_number:
-; in: ax, out: part_res
-; cleans part_res and part_sgn, 
-; calls read_number_util
-; changes sign
-	mov	word ptr ds:[part_res], 0
-	mov	byte ptr ds:[part_sgn], 0
-	call	read_number_util
-
-	mov	al, byte ptr ds:[part_sgn]
-	cmp	al, 1
-	je	change_sgn
-	ret
-
-	change_sgn:
-		neg	 word ptr ds:[part_res]
-		ret
-
-
-read_number_util:
-	; out: part_res, part_sgn
+	; out: current num, sign
     	call 	read_char			; load char to process
     	cmp 	al, 13   			; 13 represents carriage return
-    	jne 	read_number_loop		; if encountered -> return
+    	jne 	read_number_loop			; if encountered -> return
     	ret
 
     	read_number_loop:
-    		cmp 	al, '-'
-    		jne 	no_sgn
-    		mov 	byte ptr ds:[part_sgn], 1
-    		jmp	read_number_util
-
-    		no_sgn:
     		cmp	al, '0'
     		jl 	error_end
     		cmp 	al, '9'
@@ -314,25 +238,20 @@ read_number_util:
         	mov 	bl, al 				; we need to copy to bl as ax will be destroyed
         	mov 	ax, word ptr ds:[part_res] 	; store in ax partial result
         	mov 	cx, 10
-        	imul 	cx          			; curr_number = curr_number * 10
+        	mul 	cx          			; curr_number = curr_number * 10
 
-        	sub 	bl, '0'     			; dig = 'dig' - '0', in bl we store curr char
+        	sub 	bl, '0'     			; 'digit'-'0' = digit, in bl we store curr char
         	xor 	bh, bh				; reset bh register
         	add 	ax, bx      			; curr_num = curr_num + digit
 
         	mov 	word ptr ds:[part_res], ax 	; add new partial result
-        	jmp 	read_number_util     		; handle next character
+        	jmp 	read_number     			; handle next character
 
 write_number:
 	; in: ax = number to print
 	cmp	ax, 0				; check sign
-	jge	positive_num
-	mov	dl, '-'
-
-	push 	ax				; write_char destroys ax
-	call 	write_char
-	pop  	ax
-	neg 	ax
+    	jge	positive_num
+    	neg 	ax
 
     	positive_num:
     		mov 	cx, 0        
@@ -340,7 +259,7 @@ write_number:
 
     		loop_push:
         		div 	bl          	; al = ax / bl
-                        				; ah = ax % bl
+                        			; ah = ax % bl
 
         		push	ax          	; digit pushed on stack
         
@@ -369,37 +288,28 @@ get_ab:
 	mov     dx, offset text_ask_a   	; prompt user for a value
 	call    base_print
 
-	call 	read_number 			; get number and store it under valueA
-	mov 	ax, word ptr ds:[part_res]
-	mov 	word ptr ds:[valueA], ax
+	mov 	word ptr ds:[part_res], 0	; get number and store it under valueA
+    	call 	read_number
+    	mov 	ax, word ptr ds:[part_res]
+    	mov 	word ptr [ds:valueA], ax
 
-	mov 	dx, offset nl       		; print text at ds:dx - here newline
-	call    base_print
+    	mov 	dx, offset nl       		; print text at ds:dx - here newline
+    	call    base_print
 
-	mov 	dx, offset text_ask_b   	; prompt user for b value
-	call    base_print
+    	mov 	dx, offset text_ask_b   	; prompt user for b value
+    	call    base_print
+    
+    	mov 	word ptr ds:[part_res], 0	; get number and store it under valueB
+    	call 	read_number
+    	mov 	ax, word ptr ds:[part_res]
+    	mov 	word ptr [ds:valueB], ax
 
-	call 	read_number 			; get number and store it under valueB
-	mov 	ax, word ptr ds:[part_res]
-	mov 	word ptr [ds:valueB], ax
+    	mov 	dx, offset nl			; print text at ds:dx - here newline
+    	call    base_print
 
-	mov 	dx, offset nl			; print text at ds:dx - here newline
-	call    base_print
-
-	mov 	ax, word ptr ds:[valueA]	; before exit we want to have: ax=valueA, bx=valueB
-	mov 	bx, word ptr ds:[valueB]	; because we rely on it in program main part (reusing)
-	ret
-
-
-abs:
-; in ax, out ax
-	cmp 	ax, 0
-	jl 	negative
-	ret
-
-	negative:
-		neg 	ax
-		ret
+    	mov 	ax, word ptr [ds:valueA]	; before exit we want to have: ax=valueA, bx=valueB
+    	mov 	bx, word ptr [ds:valueB]	; because we rely on it in program main part (reusing)
+    	ret
 
 
 base_print:
