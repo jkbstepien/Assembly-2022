@@ -252,13 +252,13 @@ error_range_end:
 validate_range:
 	; ax = a, bx = b
 	; cmp checks if values passed by user are in valid range
-	cmp	ax, -1280
+	cmp	ax, -128
 	jl	error_range_end
-	cmp	ax, 1270
+	cmp	ax, 127
 	jg	error_range_end
-	cmp	bx, -1280
+	cmp	bx, -128
 	jl	error_range_end
-	cmp	bx, 1270
+	cmp	bx, 127
 	jg	error_range_end
 	ret					; if everything's fine -> return to program main part
 
