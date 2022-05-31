@@ -52,24 +52,25 @@ process_input:
 		neg  	ax 			; because we want to print -bx/ax 
 
 		cmp 	ax, 0
-		jg  	positive_ax
+		jge 	positive_ax
 
 		cmp 	bx, 0
-		jg	positive_ax_negative_bx
+		jge	negative_ax_positive_bx
 
 		jmp 	negative_ax_negative_bx
 
 		positive_ax:
 			cmp 	bx, 0
-			jg	positive_ax_positive_bx
+			jge	positive_ax_positive_bx
 
 			jmp  	positive_ax_negative_bx
 
-		positive_ax_negative_bx: 	; the same as negative_ax_positive_bx
-			call	abs
-			xchg	ax, bx
+		negative_ax_positive_bx:
+		positive_ax_negative_bx: 		; the same as negative_ax_positive_bx
+			call	abs			; we don't know which parameter is negative/positive
+			xchg	ax, bx			; so we call abs to obtain absolute value for both
 			call 	abs
-			xchg 	ax, bx
+			xchg 	ax, bx			; xchg swaps values in ax, bx
 
 			; ax = abs(ax), bx = abs(bx)
 
@@ -79,7 +80,8 @@ process_input:
 			call 	write_char
 			pop  	ax
 
-			jmp positive_ax_positive_bx
+			jmp positive_ax_positive_bx	; we handled minus sign so we can use another etiquette to
+							; print whole result
 
 		negative_ax_negative_bx:
 			call 	abs
@@ -89,7 +91,7 @@ process_input:
 
 			; ax = abs(ax), bx = abs(bx)
 
-			jmp	positive_ax_positive_bx
+			jmp	positive_ax_positive_bx	; we don't need to print minus as a*b > 0
 
 		positive_ax_positive_bx:
 		cmp	bx, 0 				; we don't want to print 0/1
@@ -136,8 +138,10 @@ process_input:
 		mov	ax, word ptr ds:[valueB]		; print result in form of: "a/b"
 		call 	abs
 		call	write_number
+
 		mov	dl, '/'
 		call	write_char
+
 		mov	ax, word ptr ds:[valueA]
 		call  	abs
 		call	write_number
@@ -161,7 +165,7 @@ plot:
 	mov	ax, word ptr ds:[plot_size]		; calculate midpoint of a plot
 	mov	bx, 2
 	idiv	bl
-	cbw
+	cbw						; cbw sign-extends a byte into word.
 	mov	word ptr ds:[mid_point], ax
 
 	mov	dx, seg buffer				; initialize buffer using extra segment es
@@ -300,16 +304,16 @@ read_number_util:
     	ret
 
     	read_number_loop:
-    		cmp 	al, '-'
-    		jne 	no_sgn
-    		mov 	byte ptr ds:[part_sgn], 1
-    		jmp	read_number_util
+    		cmp 	al, '-'				; check if input is a minus sign
+    		jne 	no_sgn				; no -> process positive value
+    		mov 	byte ptr ds:[part_sgn], 1	; yes -> set part_sign as 1: that means input is negative
+    		jmp	read_number_util		; repeat process until read whole number
 
-    		no_sgn:
-    		cmp	al, '0'
-    		jl 	error_end
-    		cmp 	al, '9'
-    		jg 	error_end
+    		no_sgn:				
+    		cmp	al, '0'				; check if input represents a digit.
+    		jl 	error_end			; if input is lesser than '0' it can't be a number
+    		cmp 	al, '9'				; check if input represents a digit
+    		jg 	error_end			; if input is greater than '9' it can't be a number
 
         	mov 	bl, al 				; we need to copy to bl as ax will be destroyed
         	mov 	ax, word ptr ds:[part_res] 	; store in ax partial result
@@ -332,10 +336,11 @@ write_number:
 	push 	ax				; write_char destroys ax
 	call 	write_char
 	pop  	ax
-	neg 	ax
+	neg 	ax				; we already handled minus sign so there is no need to work on
+						; negative number
 
     	positive_num:
-    		mov 	cx, 0        
+   		mov 	cx, 0        		; digit counter
     		mov 	bl, 10       		; system base (in which be printed)
 
     		loop_push:
@@ -393,9 +398,9 @@ get_ab:
 
 abs:
 ; in ax, out ax
-	cmp 	ax, 0
-	jl 	negative
-	ret
+	cmp 	ax, 0			; check if ax is lesser than 0
+	jl 	negative		; yes -> negate ax and return
+	ret				; no -> we don't need to modify ax
 
 	negative:
 		neg 	ax
